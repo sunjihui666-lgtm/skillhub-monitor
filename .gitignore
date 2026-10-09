@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# 采样数据（含真实 slug，不入库）
+*.csv
+snapshot.json
+growth.csv
+trip_growth.csv
+samples.json
+
+# 临时
+*.tmp
+config.json.tmp
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 说明：docs/images/ 下的效果图需要提交（README 引用），不要忽略

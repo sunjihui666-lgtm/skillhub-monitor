@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Skill 下载量监控看板</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1d2129; --border:#262b36;
+    --text:#e6e9ef; --muted:#98a2b3; --accent:#4c8dff; --good:#35c46b; --warn:#ffb020; --bad:#ff5c5c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;}
+  .wrap{max-width:1240px;margin:0 auto;padding:22px 20px 60px;}
+  h1{font-size:19px;margin:0 0 2px;font-weight:650}
+  .sub{color:var(--muted);font-size:12.5px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+  .field{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+  input,select,button{font:inherit;color:var(--text);background:var(--panel2);
+    border:1px solid var(--border);border-radius:7px;padding:6px 9px;outline:none}
+  input[type=number]{width:74px}
+  input[type=text]{width:250px}
+  button{cursor:pointer;transition:.15s}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button.primary:hover{filter:brightness(1.1)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:16px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .kpi .lbl{color:var(--muted);font-size:12px;margin-bottom:6px}
+  .kpi .val{font-size:23px;font-weight:680;letter-spacing:.3px}
+  .kpi .val.good{color:var(--good)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+  th{color:var(--muted);font-weight:600;font-size:12px;position:sticky;top:0;background:var(--panel)}
+  th:first-child,td:first-child{text-align:left}
+  td.name{max-width:230px;white-space:normal}
+  td.name small{color:var(--muted);display:block;font-size:11px}
+  tr:hover td{background:rgba(76,141,255,.06)}
+  .num{font-variant-numeric:tabular-nums}
+  .pos{color:var(--good)} .zero{color:var(--muted)}
+  canvas{width:100%;height:260px;display:block}
+  .status{font-size:12.5px;color:var(--muted);min-height:18px}
+  .status.err{color:var(--bad)} .status.ok{color:var(--good)}
+  .hint{background:rgba(255,176,32,.09);border:1px solid rgba(255,176,32,.35);
+    color:#ffd08a;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-top:10px;display:none}
+  .hint code{background:rgba(0,0,0,.3);padding:1px 5px;border-radius:4px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
+  /* 配置面板 */
+  #cfgMask{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:50}
+  #cfgMask.on{display:flex;align-items:center;justify-content:center}
+  #cfgPanel{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    width:min(760px,94vw);max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+  #cfgHead{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+  #cfgBody{padding:14px 18px;overflow:auto;flex:1}
+  #cfgFoot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center}
+  .gcard{border:1px solid var(--border);border-radius:10px;margin-bottom:12px;background:var(--panel2)}
+  .ghead{display:flex;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border)}
+  .ghead input[type=text]{flex:0 0 180px}
+  .grow{padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+  .srow{display:flex;gap:8px;align-items:center}
+  .srow input[type=text]{flex:1}
+  .srow input.ename{flex:0 0 190px}
+  .srow .mono{font-family:var(--mono);font-size:12px}
+  .hintline{color:var(--muted);font-size:12px;margin:2px 0 8px}
+  .tagset{display:flex;gap:6px;flex-wrap:wrap}
+  .tag{display:inline-flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--border);
+    border-radius:20px;padding:2px 6px 2px 10px;font-size:12px;color:var(--muted)}
+  .tag button{background:none;border:none;padding:0 4px;cursor:pointer;color:var(--muted);font-size:14px;line-height:1}
+  .tag button:hover{color:var(--bad)}
+  .tag .x{color:var(--bad)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Skill 下载量监控看板</h1>
+  <div class="sub">
+    监控清单来自 <code>config.json</code>（代码内不写死任何 slug） ·
+    当前组 <span id="grpLabel">—</span> ·
+    数据源 <span id="srcLabel">—</span> ·
+    快照时间 <span id="capAt">—</span>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="field">数据源
+        <select id="mode">
+          <option value="snapshot">内嵌快照（离线可看）</option>
+          <option value="live">直连 API（实时采样）</option>
+        </select>
+      </div>
+      <div class="field">代理地址
+        <input type="text" id="proxy" value="http://127.0.0.1:8787/api" />
+      </div>
+      <div class="field">采样间隔
+        <input type="number" id="interval" value="1" min="1" />
+        <select id="unit">
+          <option value="min">分钟</option>
+          <option value="sec">秒</option>
+        </select>
+      </div>
+      <div class="field">轮数
+        <input type="number" id="rounds" value="5" min="1" />
+      </div>
+      <button class="primary" id="btnStart">开始采样</button>
+      <button id="btnOnce">立即采样一次</button>
+      <button id="btnStop" disabled>停止</button>
+      <span style="flex:1"></span>
+      <button id="btnConfig">⚙ 监控对象</button>
+      <button id="btnImport">导入 JSON</button>
+      <button id="btnExportJson">导出 JSON</button>
+      <button id="btnExportCsv">导出 CSV</button>
+      <input type="file" id="fileInput" accept=".json" hidden />
+    </div>
+    <div class="status" id="status" style="margin-top:10px">就绪。</div>
+    <div class="hint" id="hint"></div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="lbl">监控 Skill 数</div><div class="val" id="kCount">0</div></div>
+    <div class="kpi"><div class="lbl">当前总下载量</div><div class="val num" id="kTotal">0</div></div>
+    <div class="kpi"><div class="lbl">本次采样总增量</div><div class="val num good" id="kDelta">0</div></div>
+    <div class="kpi"><div class="lbl">平均每分钟</div><div class="val num good" id="kRate">0</div></div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600;margin-bottom:10px">各 Skill 每分钟增长量</div>
+    <canvas id="chart"></canvas>
+    <div class="legend"><span><i style="background:var(--accent)"></i>每分钟增量</span>
+      <span id="chartHint" style="color:var(--muted)">需要至少 2 次采样才能计算增量</span></div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600;margin-bottom:10px">下载量增长趋势（累计）</div>
+    <canvas id="trend"></canvas>
+    <div class="legend"><span id="trendHint" style="color:var(--muted)">需要至少 2 次采样才能形成趋势线</span></div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:auto;max-height:520px">
+    <table id="tbl">
+      <thead><tr>
+        <th>Skill</th><th>累计下载</th><th>增量</th><th>每分钟</th>
+        <th>installs</th><th>stars</th><th>versions</th><th>comments</th><th>版本</th><th>更新时间</th><th>状态</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script id="seed" type="application/json">
+{"capturedAt":"","note":"占位快照：真实监控清单来自 config.json。此处仅作 file:// 离线打开时的兜底，不含任何写死的 slug。","skills":[]}
+</script>
+
+<div id="cfgMask">
+  <div id="cfgPanel">
+    <div id="cfgHead">
+      <strong style="flex:1">监控对象配置</strong>
+      <span style="color:var(--muted);font-size:12px" id="cfgPath"></span>
+      <button id="cfgClose">关闭</button>
+    </div>
+    <div id="cfgBody">
+      <div class="hintline">
+        改这里即可切换监控对象，代码里不写死任何 slug。保存会写回 <code>config.json</code>；
+        命令行版 <code>skillhub_download_monitor.py</code> 读的是同一个文件。
+      </div>
+      <div id="cfgGroups"></div>
+      <button id="cfgAddGroup">+ 新增一组</button>
+    </div>
+    <div id="cfgFoot">
+      <button class="primary" id="cfgSave">保存到 config.json</button>
+      <button id="cfgLoad">重新载入文件</button>
+      <button id="cfgResetDefault">恢复内嵌兜底</button>
+      <span style="flex:1"></span>
+      <span style="color:var(--muted);font-size:12px" id="cfgMsg"></span>
+    </div>
+  </div>
+</div>
+
+
+<script>
+const seed = JSON.parse(document.getElementById('seed').textContent);
+const API_PATH = 'https://api.skillhub.cn/api/v1/skills/batch';
+
+const state = {
+  skills: seed.skills.map(s => ({...s})),
+  samples: [],       // [{ts, bySlug:{slug:{downloads,installs,stars,versions,comments}}}]
+  timer: null,
+  running: false,
+  done: 0,           // 已成功轮次
+  total: 0,          // 目标轮次
+  fails: 0,          // 连续失败次数
+  sleepResolve: null,
+  missing: [],// 上游返回的不存在 slug
+  capAt: seed.capturedAt,
+  cfg: { settings:{}, groups:[] },   // config.json 原始内容（可回写）
+  cfgLoaded: false                // 是否成功读到 config.json
+};
+
+const $ = id => document.getElementById(id);
+const fmt = n => (n==null?'—':Number(n).toLocaleString('en-US'));
+
+function setStatus(msg, cls){ const e=$('status'); e.textContent=msg; e.className='status'+(cls?' '+cls:''); }
+function showHint(html){ const h=$('hint'); if(html){h.innerHTML=html;h.style.display='block';} else h.style.display='none'; }
+
+/* ---------- 采样 ---------- */
+function slugs(){ return state.skills.map(s=>s.slug); }
+
+async function fetchLive(){
+  const base = $('proxy').value.replace(/\/$/,'');
+  const url = base + '/v1/skills/batch';
+  const resp = await fetch(url, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({slugs: slugs()})
+  });
+  if(!resp.ok) throw new Error('HTTP '+resp.status);
+  const data = await resp.json();
+  const bySlug = {};
+  for(const it of (data.items||[])){
+    const canon = (it.namespace||{}).canonicalName;
+    const st = ((it.skill||{}).stats)||{};
+    if(canon) bySlug[canon] = {
+      downloads: st.downloads||0, installs: st.installs||0,
+      stars: st.stars||0, versions: st.versions||0, comments: st.comments||0
+    };
+  }
+  return { bySlug, missing: data.missing || [] };
+}
+
+async function takeSample(){
+  // 快照模式无法取新数据，自动切到实时模式（同源http下可用）
+  if($('mode').value !== 'live'){ $('mode').value = 'live'; render(); }
+  try{
+    setStatus('采样中…');
+    const {bySlug, missing} = await fetchLive();
+    state.missing = missing;
+
+    const got = Object.keys(bySlug).length;
+    if(got === 0){
+      // 上游一条都没返回：多为 Skill 已下架/改名，或 slug 失效
+      const detail = missing.length
+        ? `上游返回 ${missing.length} 个 Skill 不存在（可能已下架或改名）`
+        : '上游返回 0 条数据';
+      setStatus('采样失败：'+detail+'。', 'err');
+      render();
+      return false;
+    }
+
+    state.samples.push({ts: new Date().toISOString(), bySlug});
+    const warn = missing.length ? `，另有 ${missing.length} 个已下架/不存在` : '';
+    setStatus('采样成功：'+ new Date().toLocaleTimeString('zh-CN') +`，本轮取到 ${got}/${slugs().length} 个`+warn+'，累计样本 '+ state.samples.length, missing.length?'err':'ok');
+    showHint(null);
+    render();
+    return true;
+  }catch(e){
+    setStatus('采样失败：'+e.message,'err'); showLiveHint(); return false;
+  }
+}
+
+function showLiveHint(){
+  showHint('浏览器直连被 CORS 拦截（服务端仅放行 skillhub.cn）。请用随附代理启动：<br>'+
+    '<code>python serve.py</code> 然后打开 <code>http://127.0.0.1:8787/</code>，'+
+    '或把本页放在同源环境并保持「代理地址」指向 <code>/api</code>。');
+}
+
+function startSampling(){
+  const total = Math.max(1, parseInt($('rounds').value)||1);
+  const iv = Math.max(1, parseInt($('interval').value)||1);
+  const ms = ($('unit').value==='min'? 60000 : 1000) * iv;
+  const unitTxt = $('unit').value==='min' ? ' 分钟' : ' 秒';
+
+  if($('mode').value !== 'live'){ $('mode').value = 'live'; render(); }
+
+  state.running = true;
+  state.done = 0;
+  state.total = total;
+  state.fails = 0;
+  $('btnStart').disabled = true; $('btnStop').disabled = false;
+  setStatus(`开始采样：共 ${total} 轮，间隔 ${iv}${unitTxt}（预计 ${((total-1)*ms/60000).toFixed(1)} 分钟）`);
+
+  const sleep = (ms) => new Promise(res => {
+    state.sleepResolve = res;
+    state.timer = setTimeout(() => { state.timer = null; state.sleepResolve = null; res(); }, ms);
+  });
+
+  (async () => {
+    while(state.running && state.done < total){
+      const ok = await takeSample();
+      if(!state.running) break;
+
+      if(ok){
+        state.done++;
+        state.fails = 0;
+        setStatus(`采样中：第 ${state.done}/${total} 轮完成（${new Date().toLocaleTimeString('zh-CN')}）`, 'ok');
+      }else{
+        // 关键：失败不再终止整个任务，而是重试
+        state.fails++;
+        if(state.fails > 3){
+          setStatus(`连续 ${state.fails} 次失败，已停止。请确认代理 http://127.0.0.1:8787 已启动。`, 'err');
+          break;
+        }
+        setStatus(`第 ${state.done+1}/${total} 轮失败（第 ${state.fails} 次），${Math.round(ms/1000)}s 后重试…`, 'err');
+      }
+
+      if(!state.running || state.done >= total) break;
+      await sleep(ms);
+    }
+
+    if(state.running){
+      $('btnStart').disabled = false; $('btnStop').disabled = true;
+      if(state.done >= total) setStatus(`采样完成：${total} 轮已全部执行，共 ${state.samples.length} 个样本。`, 'ok');
+      state.running = false;
+    }
+  })();
+}
+
+function stopSampling(){
+  state.running = false;
+  if(state.timer){ clearTimeout(state.timer); state.timer = null; }
+  // 唤醒可能正在等待的循环，避免卡住
+  if(state.sleepResolve){ const r = state.sleepResolve; state.sleepResolve = null; r(); }
+  $('btnStart').disabled = false; $('btnStop').disabled = true;
+  setStatus(`已停止（已完成 ${state.done}/${state.total||'-'} 轮）。`);
+}
+
+/* ---------- 计算增量 ---------- */
+function computeDeltas(){
+  const n = state.samples.length;
+  const out = {};  // slug -> {delta, perMin}
+  if(n < 2) return out;
+  const a = state.samples[n-2], b = state.samples[n-1];
+  const gapMin = (new Date(b.ts) - new Date(a.ts)) / 60000;
+  for(const s of slugs()){
+    const d1 = (a.bySlug[s]||{}).downloads ?? null;
+    const d2 = (b.bySlug[s]||{}).downloads ?? null;
+    if(d1==null || d2==null) continue;
+    const delta = d2 - d1;
+    out[s] = { delta, perMin: gapMin>0 ? delta/gapMin : 0 };
+  }
+  return out;
+}
+
+/* ---------- 渲染 ---------- */
+function currentStats(){
+  // 优先用最新样本，否则用内嵌快照
+  const last = state.samples[state.samples.length-1];
+  return state.skills.map(s=>{
+    const live = last && last.bySlug[s.slug];
+    return {...s, ...(live||{})};
+  });
+}
+
+function render(){
+  const deltas = computeDeltas();
+  const rows = currentStats();
+  const hasDelta = Object.keys(deltas).length > 0;
+
+  const totalDl = rows.reduce((a,r)=>a+(r.downloads||0),0);
+  const totalDelta = hasDelta ? rows.reduce((a,r)=>a+(deltas[r.slug]?.delta||0),0) : 0;
+  const n = state.samples.length;
+  let spanMin = 0;
+  if(n>=2) spanMin = (new Date(state.samples[n-1].ts) - new Date(state.samples[0].ts))/60000;
+  const avgRate = (hasDelta && spanMin>0) ? rows.reduce((a,r)=>a+(deltas[r.slug]?.delta||0),0)/spanMin : 0;
+
+  $('kCount').textContent = rows.length;
+  $('kTotal').textContent = fmt(totalDl);
+  $('kDelta').textContent = hasDelta ? '+'+fmt(totalDelta) : '—';
+  $('kRate').textContent = hasDelta ? avgRate.toFixed(2) : '—';
+  $('srcLabel').textContent = $('mode').value==='live' ? '实时采样' : '内嵌快照';
+  $('capAt').textContent = state.capAt ? state.capAt.replace('T',' ') : '—';
+  if($('grpLabel')) $('grpLabel').textContent = groupLabel();
+
+  // 表格
+  const tb = $('tbl').querySelector('tbody');
+  tb.innerHTML = rows.map(r=>{
+    const d = deltas[r.slug];
+    const pending = '待采样';
+    const dTxt = hasDelta ? (d ? (d.delta>=0?'+':'')+fmt(d.delta) : '—') : pending;
+    const rTxt = hasDelta ? (d ? d.perMin.toFixed(2) : '—') : pending;
+    const cls = (hasDelta && d && d.delta>0) ? 'pos' : 'zero';
+    const miss = state.missing.includes(r.slug);
+    const statusCell = miss ? '<span style="color:var(--bad)">已下架</span>'
+      : (state.samples.length ? '<span style="color:var(--good)">正常</span>' : '—');
+    return `<tr>
+      <td class="name">${r.name}<small>${r.slug}</small></td>
+      <td class="num">${fmt(r.downloads)}</td>
+      <td class="num ${cls}">${dTxt}</td>
+      <td class="num ${cls}">${rTxt}</td>
+      <td class="num">${fmt(r.installs)}</td>
+      <td class="num">${fmt(r.stars)}</td>
+      <td class="num">${fmt(r.versions)}</td>
+      <td class="num">${fmt(r.comments)}</td>
+      <td>${r.version||'—'}</td>
+      <td>${r.updatedAt? new Date(r.updatedAt).toLocaleString('zh-CN'):'—'}</td>
+      <td>${statusCell}</td>
+    </tr>`;
+  }).join('');
+
+  $('chartHint').style.display = hasDelta ? 'none':'inline';
+  drawChart(rows, deltas, hasDelta);
+  drawTrend();
+}
+
+/* 累计下载趋势线（按样本时间序列） */
+const SERIES_COLORS = ['#4c8dff','#35c46b','#ffb020','#ff5c5c','#a78bfa','#22d3ee','#f472b6','#84cc16'];
+function drawTrend(){
+  const cv = $('trend'); if(!cv) return;
+  const dpr = window.devicePixelRatio||1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w*dpr; cv.height = h*dpr;
+  const g = cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+
+  const S = state.samples;
+  const padL=56, padR=16, padT=16, padB=28;
+  const plotW = w-padL-padR, plotH = h-padT-padB;
+  g.font = '11px sans-serif';
+
+  if(S.length < 2){
+    g.fillStyle = '#98a2b3';
+    g.fillText('需要至少 2 次采样才能画趋势线（当前 ' + S.length + ' 次）', padL, padT+18);
+    return;
+  }
+
+  const ss = slugs();
+  let min = Infinity, max = -Infinity;
+  for(const s of S) for(const sl of ss){
+    const v = (s.bySlug[sl]||{}).downloads;
+    if(v!=null){ min = Math.min(min,v); max = Math.max(max,v); }
+  }
+  if(!isFinite(min)){ g.fillStyle='#98a2b3'; g.fillText('无有效数据', padL, padT+18); return; }
+  if(min === max){ min -= 1; max += 1; }
+  const pad = (max-min)*0.12; min -= pad; max += pad;
+
+  // 网格 + Y 轴
+  g.strokeStyle='#262b36'; g.fillStyle='#98a2b3';
+  const yFmt = v => (max-min) < 20 ? v.toFixed(1) : fmt(Math.round(v));
+  for(let i=0;i<=4;i++){
+    const y = padT + plotH*i/4;
+    g.beginPath(); g.moveTo(padL,y); g.lineTo(w-padR,y); g.stroke();
+    g.fillText(yFmt(max-(max-min)*i/4), 4, y+4);
+  }
+  // X 轴时间
+  const t0 = new Date(S[0].ts), t1 = new Date(S[S.length-1].ts);
+  g.fillText(t0.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}), padL, h-8);
+  g.textAlign='right';
+  g.fillText(t1.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}), w-padR, h-8);
+  g.textAlign='left';
+
+  // 每条 skill 一条线
+  const total = S.length;
+  ss.forEach((sl,k)=>{
+    const pts = [];
+    S.forEach((s,i)=>{
+      const v = (s.bySlug[sl]||{}).downloads;
+      if(v==null) return;
+      const x = padL + plotW * (total===1 ? 0.5 : i/(total-1));
+      const y = padT + plotH * (1 - (v-min)/(max-min));
+      pts.push([x,y,v]);
+    });
+    if(!pts.length) return;
+    const c = SERIES_COLORS[k % SERIES_COLORS.length];
+    g.strokeStyle = c; g.lineWidth = 2; g.lineJoin='round';
+    g.beginPath();
+    pts.forEach(([x,y],i)=> i ? g.lineTo(x,y) : g.moveTo(x,y));
+    g.stroke();
+    g.fillStyle = c;
+    pts.forEach(([x,y])=>{ g.beginPath(); g.arc(x,y,3,0,Math.PI*2); g.fill(); });
+    // 末端标注数值
+    const [lx,ly,lv] = pts[pts.length-1];
+    g.fillStyle = '#e6e9ef';
+    g.fillText(fmt(lv), Math.min(lx+6, w-padR-46), ly-6);
+  });
+
+  // 图例
+  const legendEl = $('trendHint');
+  if(legendEl){
+    legendEl.innerHTML = ss.map((sl,k)=>
+      `<span style="margin-right:14px"><i style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;background:${SERIES_COLORS[k%SERIES_COLORS.length]}"></i>${sl.split('/').pop()}</span>`
+    ).join('');
+  }
+}
+
+function drawChart(rows, deltas, hasDelta){
+  const cv = $('chart');
+  const dpr = window.devicePixelRatio||1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w*dpr; cv.height = h*dpr;
+  const g = cv.getContext('2d'); g.scale(dpr,dpr);
+  g.clearRect(0,0,w,h);
+
+  const padL=8, padR=8, padT=16, padB=54;
+  const plotW = w-padL-padR, plotH = h-padT-padB;
+  const vals = rows.map(r=> hasDelta ? (deltas[r.slug]?.perMin||0) : 0);
+  const max = Math.max(1, ...vals);
+
+  // 网格
+  g.strokeStyle='#262b36'; g.fillStyle='#98a2b3'; g.font='11px sans-serif';
+  for(let i=0;i<=4;i++){
+    const y = padT + plotH*i/4;
+    g.beginPath(); g.moveTo(padL,y); g.lineTo(w-padR,y); g.stroke();
+    g.fillText((max*(1-i/4)).toFixed(0), padL+2, y-3);
+  }
+
+  const n = rows.length, slot = plotW/n, bw = Math.min(56, slot*0.5);
+  rows.forEach((r,i)=>{
+    const v = vals[i];
+    const bh = plotH * (v/max);
+    const x = padL + slot*i + (slot-bw)/2;
+    const y = padT + plotH - bh;
+    g.fillStyle = v>0 ? '#4c8dff' : '#2a3140';
+    g.beginPath();
+    const rr=4;
+    g.moveTo(x, y+bh); g.lineTo(x, y+rr); g.quadraticCurveTo(x,y,x+rr,y);
+    g.lineTo(x+bw-rr,y); g.quadraticCurveTo(x+bw,y,x+bw,y+rr);
+    g.lineTo(x+bw, y+bh); g.closePath(); g.fill();
+
+    if(hasDelta && v>0){ g.fillStyle='#e6e9ef'; g.textAlign='center'; g.font='11px sans-serif'; g.fillText('+'+v.toFixed(1), x+bw/2, y-4); g.textAlign='left'; }
+
+    // 标签：用显示名的末段，去掉冗长后缀
+    g.save(); g.translate(padL+slot*i+slot/2, h-padB+10);
+    g.rotate(-0.42); g.fillStyle='#98a2b3'; g.font='11px sans-serif';
+    const label = shortLabel(r);
+    g.fillText(label.length>10?label.slice(0,10)+'…':label, 0, 12); g.restore();
+  });
+}
+
+/* 图表标签：取显示名末段（去掉「某某公司某某模块」这类冗长前缀） */
+function shortLabel(r){
+  const n = (r.name || r.slug || '').trim();
+  if(!n) return r.slug || '';
+  const parts = n.split(/[\s·|｜\/]+/).filter(Boolean);
+  return parts.length>1 ? parts[parts.length-1] : n;
+}
+
+/* ---------- 导入 / 导出 ---------- */
+function exportJSON(){
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    skills: state.skills,
+    samples: state.samples,
+    deltas: computeDeltas()
+  };
+  download('skillhub_monitor_'+stamp()+'.json', JSON.stringify(payload,null,2), 'application/json');
+}
+function exportCSV(){
+  const deltas = computeDeltas();
+  const rows = currentStats();
+  const head = ['slug','name','downloads','delta','per_minute','installs','stars','versions','comments','version','updatedAt'];
+  const lines = [head.join(',')];
+  for(const r of rows){
+    const d = deltas[r.slug];
+    lines.push([
+      r.slug, '"'+(r.name||'').replace(/"/g,'""')+'"', r.downloads,
+      d?d.delta:'', d?d.perMin.toFixed(4):'',
+      r.installs, r.stars, r.versions, r.comments, r.version||'', r.updatedAt||''
+    ].join(','));
+  }
+  download('skillhub_monitor_'+stamp()+'.csv', '\ufeff'+lines.join('\n'), 'text/csv');
+}
+function importJSON(file){
+  const fr = new FileReader();
+  fr.onload = () => {
+    try{
+      const d = JSON.parse(fr.result);
+      if(Array.isArray(d.skills)) state.skills = d.skills.map(s=>({...s}));
+      if(Array.isArray(d.samples)) state.samples = d.samples;
+      if(d.capturedAt) state.capAt = d.capturedAt;
+      if(d.exportedAt) state.capAt = d.exportedAt;
+      render();
+      setStatus('导入成功：'+state.skills.length+' 个 skill，'+state.samples.length+' 个样本。','ok');
+    }catch(e){ setStatus('导入失败：'+e.message,'err'); }
+  };
+  fr.readAsText(file);
+}
+function stamp(){ const d=new Date(),p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
+function download(name, text, mime){
+  const blob = new Blob([text],{type:mime+';charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1500);
+}
+
+/* ---------- 事件 ---------- */
+$('btnStart').onclick = startSampling;
+$('btnStop').onclick = stopSampling;
+$('btnOnce').onclick = takeSample;
+$('btnExportJson').onclick = exportJSON;
+$('btnExportCsv').onclick = exportCSV;
+$('btnImport').onclick = ()=> $('fileInput').click();
+$('fileInput').onchange = e => { if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=''; };
+$('mode').onchange = () => {
+  if($('mode').value==='live'){ showLiveHint(); setStatus('已切换实时模式，请确认代理已启动。',''); }
+  else { showHint(null); setStatus('已切回快照模式。'); }
+  render();
+};
+window.addEventListener('resize', render);
+
+/* 配置面板事件（委托，因为内容是动态渲染的） */
+$('btnConfig').onclick = openCfgPanel;
+$('cfgClose').onclick = closeCfgPanel;
+$('cfgMask').onclick = e => { if(e.target.id === 'cfgMask') closeCfgPanel(); };
+$('cfgSave').onclick = saveCfg;
+$('cfgLoad').onclick = async () => {
+  const ok = await loadConfig();
+  $('cfgMsg').innerHTML = ok
+    ? '<span style="color:var(--good)">✓ 已重新载入 config.json</span>'
+    : '<span style="color:var(--bad)">✗ 读不到 config.json</span>';
+  renderCfgPanel(); render();
+};
+$('cfgResetDefault').onclick = () => {
+  state.cfg = { settings:{interval:60,rounds:5,unit:'min',mode:'live'},
+                groups:[{ name:'默认组', enabled:true, skills:[] }] };
+  renderCfgPanel();
+  $('cfgMsg').textContent = '已重置，点「保存」写入文件';
+};
+$('cfgAddGroup').onclick = () => {
+  collectCfg();
+  state.cfg.groups.push({ name:`组${state.cfg.groups.length+1}`, enabled: state.cfg.groups.length===0, skills:[] });
+  renderCfgPanel();
+};
+$('cfgGroups').onclick = e => {
+  const t = e.target;
+  if(t.dataset.addskill !== undefined){
+    collectCfg();
+    const gi = +t.dataset.addskill;
+    state.cfg.groups[gi].skills = state.cfg.groups[gi].skills || [];
+    state.cfg.groups[gi].skills.push({ slug:'', name:'', enabled:true });
+    renderCfgPanel();
+    // 聚焦新增行
+    const rows = document.querySelectorAll(`[data-gi="${gi}"] .srow`);
+    const last = rows[rows.length-1];
+    if(last) last.querySelector('.slug').focus();
+  }
+  if(t.dataset.delskill !== undefined){
+    collectCfg();
+    const [gi,si] = t.dataset.delskill.split(',').map(Number);
+    state.cfg.groups[gi].skills.splice(si,1);
+    renderCfgPanel();
+  }
+  if(t.dataset.delgroup !== undefined){
+    collectCfg();
+    const gi = +t.dataset.delgroup;
+    if(state.cfg.groups.length===1){ setStatus('至少保留一组。','err'); return; }
+    state.cfg.groups.splice(gi,1);
+    renderCfgPanel();
+  }
+};
+$('cfgGroups').onchange = e => {
+  // 单选切换默认组时，input 的 name 已保证互斥，这里同步到 state
+  if(e.target.dataset.activate !== undefined) return; // 交给保存时collectCfg 统一处理
+};
+
+/* ---------- 配置：读config.json，应用某个组 ---------- */
+function activeGroup(){
+  const gs = state.cfg.groups || [];
+  return gs.find(g => g.enabled) || gs[0] || null;
+}
+function groupLabel(){ const g = activeGroup(); return g ? (g.name || '(未命名)') : '（无配置）'; }
+
+function applyGroup(g){
+  if(!g) return;
+  const list = (g.skills || [])
+    .filter(s => s.enabled !== false && (s.slug||'').trim())
+    .map(s => ({ slug: s.slug.trim(), name: s.name || s.slug.trim() }));
+  state.skills = list;
+  state.samples = [];
+  state.missing = [];
+  $('grpLabel').textContent = groupLabel();
+}
+
+async function loadConfig(){
+  try{
+    const r = await fetch('config.json', {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    if(!Array.isArray(d.groups) || !d.groups.length) throw new Error('groups 为空');
+    state.cfg = { settings: d.settings || {}, groups: d.groups };
+    state.cfgLoaded = true;
+    // 采样默认值也来自配置
+    const s = state.cfg.settings;
+    if(s.interval) $('interval').value = s.interval;
+    if(s.rounds)   $('rounds').value   = s.rounds;
+    if(s.mode)     $('mode').value     = s.mode;
+    applyGroup(activeGroup());
+    return true;
+  }catch(e){
+    state.cfgLoaded = false;
+    return false;
+  }
+}
+
+/* ---------- 配置面板 ---------- */
+function cfgEsc(s){ return String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderCfgPanel(){
+  const gs = state.cfg.groups || [];
+  $('cfgGroups').innerHTML = gs.map((g,gi)=>`
+    <div class="gcard" data-gi="${gi}">
+      <div class="ghead">
+        <input type="text" class="gname" value="${cfgEsc(g.name||'')}" placeholder="组名">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--muted)">
+          <input type="radio" name="gactive" ${g.enabled?'checked':''} data-activate="${gi}"> 默认组
+        </label>
+        <span style="flex:1"></span>
+        <span style="color:var(--muted);font-size:12px">${(g.skills||[]).length} 个</span>
+        <button data-delgroup="${gi}">删组</button>
+      </div>
+      <div class="grow">
+        ${(g.skills||[]).map((s,si)=>`
+          <div class="srow" data-gi="${gi}" data-si="${si}">
+            <input type="checkbox" class="sen" ${s.enabled!==false?'checked':''} title="是否参与采样">
+            <input type="text" class="mono slug" value="${cfgEsc(s.slug||'')}" placeholder="@org-xxx/slug">
+            <input type="text" class="ename" value="${cfgEsc(s.name||'')}" placeholder="显示名（可留空）">
+            <button data-delskill="${gi},${si}">删</button>
+          </div>`).join('')}
+        <button data-addskill="${gi}">+ 加一个 skill</button>
+      </div>
+    </div>`).join('');
+  $('cfgPath').textContent = state.cfgLoaded ? 'config.json ✓' : 'config.json 未读到（file:// 打开时受限制）';
+}
+
+function openCfgPanel(){
+  if(!state.cfg.groups.length) state.cfg = { settings:{}, groups:[{ name:'默认组', enabled:true, skills:[] }] };
+  renderCfgPanel();
+  $('cfgMsg').textContent = '';
+  $('cfgMask').classList.add('on');
+}
+function closeCfgPanel(){ $('cfgMask').classList.remove('on'); }
+
+// 从面板控件回写 state.cfg
+function collectCfg(){
+  const gs = [];
+  document.querySelectorAll('#cfgGroups .gcard').forEach(card=>{
+    const gi = +card.dataset.gi;
+    const old = (state.cfg.groups||[])[gi] || {};
+    const name = card.querySelector('.gname').value.trim();
+    const isActive = !!card.querySelector('[data-activate]:checked');
+    const skills = [];
+    card.querySelectorAll('.srow').forEach(row=>{
+      const slug = row.querySelector('.slug').value.trim();
+      if(!slug) return;
+      skills.push({
+        slug,
+        name: row.querySelector('.ename').value.trim(),
+        enabled: !!row.querySelector('.sen').checked
+      });
+    });
+    gs.push({ name: name || `组${gi+1}`, enabled: isActive, skills });
+  });
+  state.cfg.groups = gs;
+  // 采样默认值以面板输入为准
+  state.cfg.settings = {
+    interval: parseInt($('interval').value)||60,
+    rounds:   parseInt($('rounds').value)||5,
+    unit:     $('unit').value,
+    mode:     $('mode').value
+  };
+}
+
+async function saveCfg(){
+  collectCfg();
+  if(!state.cfg.groups.some(g=>g.enabled)) state.cfg.groups[0].enabled = true;
+  $('cfgMsg').textContent = '保存中…';
+  try{
+    const r = await fetch('api-config', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(state.cfg, null, 2)
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error || ('HTTP '+r.status));
+    state.cfgLoaded = true;
+    $('cfgMsg').innerHTML = '<span style="color:var(--good)">✓ 已写入 config.json，命令行版下次也生效</span>';
+    applyGroup(activeGroup());
+    render();
+    setStatus('配置已更新：当前组「'+groupLabel()+'」共 '+state.skills.length+' 个 skill。','ok');
+    renderCfgPanel();
+  }catch(e){
+    $('cfgMsg').innerHTML = '<span style="color:var(--bad)">✗ '+cfgEsc(e.message)
+      +'（用 start.sh 启动后端才能保存；file:// 打开只能改本页内存）</span>';
+  }
+}
+
+/* ---------- 初始化 ---------- */
+(async function init(){
+  const overHttp = location.protocol === 'http:' || location.protocol === 'https:';
+  if(overHttp){
+    // 通过本地服务打开：代理与页面同源，直连不会触发 CORS
+    $('proxy').value = location.origin + '/api';
+    $('mode').value = 'live';
+
+    const okCfg = await loadConfig();
+    if(!okCfg){
+      showHint('未读到 <code>config.json</code>：当前列表为空。请用 <code>启动看板.command</code> / <code>./start.sh</code> 打开，或点「⚙ 监控对象」手动添加。');
+    }
+
+    render();
+    if(!state.skills.length){
+      setStatus('请先在「⚙ 监控对象」里添加要监控的 skill。','');
+      return;
+    }
+    setStatus('正在采集基线…');
+    takeSample().then(ok => {
+      if(ok){
+        setStatus('基线已采集。点「开始采样」按设定轮次连续采样，或再点一次「立即采样一次」即可看到增长。','ok');
+      }
+    });
+  } else {
+    render();
+    setStatus('离线模式：可查看/导入/导出。要实时采样并编辑配置，请用 start.sh 启动后从 http://127.0.0.1:8787/ 打开。');
+  }
+})();
+</script>
+</body>
+</html>

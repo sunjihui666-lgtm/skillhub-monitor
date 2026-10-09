@@ -1,0 +1,34 @@
+{
+  "_comment": "监控清单配置。改这个文件即可切换监控对象，dashboard.html 与命令行版都读它，无需改代码。",
+  "_schema": {
+    "settings": "采样默认值，可被页面上的输入框覆盖",
+    "groups": "可切换的监控清单组，页面顶部会显示当前组名",
+    "groups[].name": "组名，显示在页面上",
+    "groups[].enabled": "是否为当前默认选中的组",
+    "groups[].skills": "该组要监控的 skill 数组；slug 填 SkillHub 的 canonicalName，形如 @org-xxx/yyy",
+    "groups[].skills[].slug": "必填。唯一标识，决定采样打到谁",
+    "groups[].skills[].name": "显示名。留空会用 slug 末段",
+    "groups[].skills[].enabled": "false 则该组内这一条被临时跳过，不参与采样"
+  },
+
+  "settings": {
+    "interval": 60,
+    "rounds": 5,
+    "unit": "min",
+    "mode": "live"
+  },
+
+  "groups": [
+    {
+      "name": "我的 Skill",
+      "enabled": true,
+      "skills": [
+        {
+          "slug": "@your-org/your-skill",
+          "name": "把这里换成你要监控的 skill",
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}
